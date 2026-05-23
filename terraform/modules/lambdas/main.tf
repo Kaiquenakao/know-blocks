@@ -40,3 +40,47 @@ resource "aws_lambda_function" "pipe_trigger" {
 
   tags = { Project = var.project }
 }
+
+# ── extract-text ──────────────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "extract_text" {
+  function_name = "${var.project}-extract-text"
+  role          = var.extract_text_role_arn
+  runtime       = "provided.al2"
+  handler       = "bootstrap"
+  filename      = "${path.module}/functions/extract-text/function.zip"
+
+  timeout     = 300
+  memory_size = 512
+
+  environment {
+    variables = {
+      DOCUMENTS_BUCKET = var.documents_bucket_name
+      EXECUTIONS_TABLE = var.executions_table_name
+    }
+  }
+
+  tags = { Project = var.project }
+}
+
+# ── chunk-document ────────────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "chunk_document" {
+  function_name = "${var.project}-chunk-document"
+  role          = var.chunk_document_role_arn
+  runtime       = "provided.al2"
+  handler       = "bootstrap"
+  filename      = "${path.module}/functions/chunk-document/function.zip"
+
+  timeout     = 300
+  memory_size = 512
+
+  environment {
+    variables = {
+      DOCUMENTS_BUCKET = var.documents_bucket_name
+      EXECUTIONS_TABLE = var.executions_table_name
+    }
+  }
+
+  tags = { Project = var.project }
+}

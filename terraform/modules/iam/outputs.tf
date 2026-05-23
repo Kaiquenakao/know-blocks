@@ -5,3 +5,15 @@ output "doc_validator_role_arn" {
 output "pipe_trigger_role_arn" {
   value = aws_iam_role.pipe_trigger.arn
 }
+
+output "extract_text_role_arn" {
+  value = aws_iam_role.extract_text.arn
+}
+
+output "chunk_document_role_arn" {
+  value = aws_iam_role.chunk_document.arn
+}
+
+output "step_functions_role_arn" {
+  value = aws_iam_role.step_functions.arn
+}

@@ -6,7 +6,22 @@ variable "documents_bucket_arn" {
   type = string
 }
 
+variable "executions_table_arn" {
+  type    = string
+  default = ""
+}
+
 variable "state_machine_arn" {
   type    = string
   default = ""
+}
+
+variable "extract_text_arn" {
+  type    = string
+  default = "*"
+}
+
+variable "chunk_document_arn" {
+  type    = string
+  default = "*"
 }

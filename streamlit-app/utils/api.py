@@ -173,6 +173,7 @@ def confirm_deploy(
         "s3_key":    s3_key,
         "payload":   payload,
     }
+    print(f"[confirm] enviando body={json.dumps(body)[:300]}")
 
     try:
         r = httpx.post(

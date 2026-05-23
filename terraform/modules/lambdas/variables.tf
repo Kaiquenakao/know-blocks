@@ -18,3 +18,16 @@ variable "state_machine_arn" {
   type    = string
   default = ""
 }
+
+variable "extract_text_role_arn" {
+  type = string
+}
+
+variable "chunk_document_role_arn" {
+  type = string
+}
+
+variable "executions_table_name" {
+  type    = string
+  default = ""
+}

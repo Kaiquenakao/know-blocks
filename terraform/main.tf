@@ -24,20 +24,39 @@ module "s3" {
   project = var.project
 }
 
+module "dynamodb" {
+  source  = "./modules/dynamodb"
+  project = var.project
+}
+
 module "iam" {
-  source               = "./modules/iam"
-  project              = var.project
-  documents_bucket_arn = module.s3.documents_bucket_arn
-  state_machine_arn    = ""
+  source                = "./modules/iam"
+  project               = var.project
+  documents_bucket_arn  = module.s3.documents_bucket_arn
+  executions_table_arn  = module.dynamodb.executions_table_arn
+  state_machine_arn     = module.step_functions.state_machine_arn
+  extract_text_arn      = module.lambdas.extract_text_arn
+  chunk_document_arn    = module.lambdas.chunk_document_arn
 }
 
 module "lambdas" {
-  source                 = "./modules/lambdas"
-  project                = var.project
-  documents_bucket_name  = module.s3.documents_bucket_name
-  doc_validator_role_arn = module.iam.doc_validator_role_arn
-  pipe_trigger_role_arn  = module.iam.pipe_trigger_role_arn
-  state_machine_arn      = ""
+  source                  = "./modules/lambdas"
+  project                 = var.project
+  documents_bucket_name   = module.s3.documents_bucket_name
+  doc_validator_role_arn  = module.iam.doc_validator_role_arn
+  pipe_trigger_role_arn   = module.iam.pipe_trigger_role_arn
+  extract_text_role_arn   = module.iam.extract_text_role_arn
+  chunk_document_role_arn = module.iam.chunk_document_role_arn
+  executions_table_name   = module.dynamodb.executions_table_name
+  state_machine_arn       = module.step_functions.state_machine_arn
+}
+
+module "step_functions" {
+  source                  = "./modules/step_functions"
+  project                 = var.project
+  step_functions_role_arn = module.iam.step_functions_role_arn
+  extract_text_arn        = module.lambdas.extract_text_arn
+  chunk_document_arn      = module.lambdas.chunk_document_arn
 }
 
 module "api_gateway" {
