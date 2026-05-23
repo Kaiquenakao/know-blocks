@@ -242,3 +242,7 @@ terraform/modules/**/dist/
 
 
 streamlit-app/.streamlit/secrets.toml
+
+
+terraform/modules/lambdas/**/bootstrap
+terraform/modules/lambdas/**/function.zip
