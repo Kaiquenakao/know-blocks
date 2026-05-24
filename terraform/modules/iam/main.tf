@@ -158,10 +158,106 @@ data "aws_iam_policy_document" "step_functions" {
       var.chunk_document_arn,
     ]
   }
+
+  statement {
+    effect  = "Allow"
+    actions = ["ecs:RunTask", "ecs:StopTask", "ecs:DescribeTasks"]
+    resources = ["*"]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "events:PutTargets",
+      "events:PutRule",
+      "events:DescribeRule",
+      "events:DeleteRule",
+      "events:RemoveTargets",
+    ]
+    resources = ["arn:aws:events:*:*:rule/StepFunctionsGetEventsForECSTaskRule"]
+  }
 }
 
 resource "aws_iam_role_policy" "step_functions" {
   name   = "${var.project}-step-functions-policy"
   role   = aws_iam_role.step_functions.id
   policy = data.aws_iam_policy_document.step_functions.json
+}
+
+# ── ECS execution role (pull imagem + logs) ───────────────────────────────────
+
+data "aws_iam_policy_document" "ecs_assume_role" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_execution" {
+  name               = "${var.project}-ecs-execution"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# ── ECS task role (S3 + DynamoDB) ────────────────────────────────────────────
+
+resource "aws_iam_role" "ecs_task" {
+  name               = "${var.project}-ecs-task"
+  assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
+}
+
+data "aws_iam_policy_document" "ecs_task" {
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${var.documents_bucket_arn}/*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem", "dynamodb:GetItem"]
+    resources = [var.executions_table_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_task" {
+  name   = "${var.project}-ecs-task-policy"
+  role   = aws_iam_role.ecs_task.id
+  policy = data.aws_iam_policy_document.ecs_task.json
+}
+
+# ── Step Functions — adiciona permissão para acionar ECS ─────────────────────
+
+resource "aws_iam_role_policy" "step_functions_ecs" {
+  name = "${var.project}-step-functions-ecs-policy"
+  role = aws_iam_role.step_functions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ecs:RunTask", "ecs:StopTask", "ecs:DescribeTasks"]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = "*"
+      }
+    ]
+  })
 }

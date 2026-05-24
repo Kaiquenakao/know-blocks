@@ -17,3 +17,11 @@ output "chunk_document_role_arn" {
 output "step_functions_role_arn" {
   value = aws_iam_role.step_functions.arn
 }
+
+output "ecs_execution_role_arn" {
+  value = aws_iam_role.ecs_execution.arn
+}
+
+output "ecs_task_role_arn" {
+  value = aws_iam_role.ecs_task.arn
+}

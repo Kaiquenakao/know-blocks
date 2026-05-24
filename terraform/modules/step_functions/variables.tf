@@ -13,3 +13,16 @@ variable "extract_text_arn" {
 variable "chunk_document_arn" {
   type = string
 }
+
+variable "ecs_cluster_arn" {
+  type = string
+}
+
+variable "embed_task_definition_arn" {
+  type = string
+}
+
+variable "subnet_ids" {
+  type        = list(string)
+  description = "Subnets para o Fargate rodar — use as subnets default da VPC"
+}

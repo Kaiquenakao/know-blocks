@@ -44,6 +44,43 @@
           "ResultPath": "$.error"
         }
       ],
+      "Next": "EmbedChunks"
+    },
+
+    "EmbedChunks": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "Parameters": {
+        "LaunchType": "FARGATE",
+        "Cluster": "${ecs_cluster_arn}",
+        "TaskDefinition": "${embed_task_definition_arn}",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": ${subnets},
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "Overrides": {
+          "ContainerOverrides": [
+            {
+              "Name": "embed-chunks",
+              "Environment": [
+                {
+                  "Name": "TASK_INPUT",
+                  "Value.$": "States.JsonToString($)"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ],
       "Next": "PipelineSucceeded"
     },
 
