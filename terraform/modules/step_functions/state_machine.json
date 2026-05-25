@@ -2,14 +2,16 @@
   "Comment": "Know-Blocks document processing pipeline",
   "StartAt": "ExtractText",
   "States": {
-
     "ExtractText": {
       "Type": "Task",
       "Resource": "${extract_text_arn}",
       "ResultPath": "$",
       "Retry": [
         {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.TooManyRequestsException"
+          ],
           "IntervalSeconds": 5,
           "MaxAttempts": 2,
           "BackoffRate": 2
@@ -17,21 +19,25 @@
       ],
       "Catch": [
         {
-          "ErrorEquals": ["States.ALL"],
+          "ErrorEquals": [
+            "States.ALL"
+          ],
           "Next": "PipelineFailed",
           "ResultPath": "$.error"
         }
       ],
       "Next": "ChunkDocument"
     },
-
     "ChunkDocument": {
       "Type": "Task",
       "Resource": "${chunk_document_arn}",
       "ResultPath": "$",
       "Retry": [
         {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.TooManyRequestsException"],
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.TooManyRequestsException"
+          ],
           "IntervalSeconds": 5,
           "MaxAttempts": 2,
           "BackoffRate": 2
@@ -39,14 +45,15 @@
       ],
       "Catch": [
         {
-          "ErrorEquals": ["States.ALL"],
+          "ErrorEquals": [
+            "States.ALL"
+          ],
           "Next": "PipelineFailed",
           "ResultPath": "$.error"
         }
       ],
       "Next": "EmbedChunks"
     },
-
     "EmbedChunks": {
       "Type": "Task",
       "Resource": "arn:aws:states:::ecs:runTask.sync",
@@ -56,7 +63,8 @@
         "TaskDefinition": "${embed_task_definition_arn}",
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
-            "Subnets": ${subnets},
+            "Subnets": ${subnets
+            },
             "AssignPublicIp": "ENABLED"
           }
         },
@@ -74,25 +82,59 @@
           ]
         }
       },
+      "ResultPath": "$.ecs_result",
       "Catch": [
         {
-          "ErrorEquals": ["States.ALL"],
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "PipelineFailed",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Next": "SaveMetadata"
+    },
+    "SaveMetadata": {
+      "Type": "Task",
+      "Resource": "${save_metadata_arn}",
+      "InputPath": "$",
+      "ResultPath": "$.save_result",
+      "Parameters": {
+        "s3_key.$": "$.s3_key",
+        "bucket.$": "$.bucket",
+        "execution_id.$": "$.execution_id",
+        "chunk_count.$": "$.chunk_count",
+        "payload.$": "$.payload"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
           "Next": "PipelineFailed",
           "ResultPath": "$.error"
         }
       ],
       "Next": "PipelineSucceeded"
     },
-
     "PipelineSucceeded": {
       "Type": "Succeed"
     },
-
     "PipelineFailed": {
       "Type": "Fail",
       "Error": "PipelineError",
       "Cause": "One of the pipeline tasks failed. Check DynamoDB for details."
     }
-
   }
 }

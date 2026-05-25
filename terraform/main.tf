@@ -39,9 +39,12 @@ module "iam" {
   project               = var.project
   documents_bucket_arn  = module.s3.documents_bucket_arn
   executions_table_arn  = module.dynamodb.executions_table_arn
+  documents_table_arn   = module.dynamodb.documents_table_arn
+  chunks_table_arn      = module.dynamodb.chunks_table_arn
   state_machine_arn     = module.step_functions.state_machine_arn
   extract_text_arn      = module.lambdas.extract_text_arn
   chunk_document_arn    = module.lambdas.chunk_document_arn
+  save_metadata_arn     = module.lambdas.save_metadata_arn
 }
 
 module "lambdas" {
@@ -52,7 +55,12 @@ module "lambdas" {
   pipe_trigger_role_arn   = module.iam.pipe_trigger_role_arn
   extract_text_role_arn   = module.iam.extract_text_role_arn
   chunk_document_role_arn = module.iam.chunk_document_role_arn
+  save_metadata_role_arn  = module.iam.save_metadata_role_arn
   executions_table_name   = module.dynamodb.executions_table_name
+  documents_table_name    = module.dynamodb.documents_table_name
+  chunks_table_name       = module.dynamodb.chunks_table_name
+  vector_bucket_name      = module.s3.vector_bucket_name
+  vector_index_name       = module.s3.vector_index_name
   state_machine_arn       = module.step_functions.state_machine_arn
 }
 
@@ -74,6 +82,7 @@ module "step_functions" {
   step_functions_role_arn   = module.iam.step_functions_role_arn
   extract_text_arn          = module.lambdas.extract_text_arn
   chunk_document_arn        = module.lambdas.chunk_document_arn
+  save_metadata_arn         = module.lambdas.save_metadata_arn
   ecs_cluster_arn           = module.ecs.cluster_arn
   embed_task_definition_arn = module.ecs.embed_task_definition_arn
   subnet_ids                = var.subnet_ids

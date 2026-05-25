@@ -22,7 +22,12 @@ variable "embed_task_definition_arn" {
   type = string
 }
 
+variable "save_metadata_arn" {
+  type = string
+}
+
+
 variable "subnet_ids" {
   type        = list(string)
-  description = "Subnets para o Fargate rodar — use as subnets default da VPC"
+  description = "Subnets para o Fargate rodar"
 }

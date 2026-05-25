@@ -25,3 +25,18 @@ variable "chunk_document_arn" {
   type    = string
   default = "*"
 }
+
+variable "documents_table_arn" {
+  type    = string
+  default = ""
+}
+
+variable "chunks_table_arn" {
+  type    = string
+  default = ""
+}
+
+variable "save_metadata_arn" {
+  type    = string
+  default = "*"
+}

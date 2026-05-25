@@ -84,3 +84,29 @@ resource "aws_lambda_function" "chunk_document" {
 
   tags = { Project = var.project }
 }
+
+# ── save-metadata ─────────────────────────────────────────────────────────────
+
+resource "aws_lambda_function" "save_metadata" {
+  function_name = "${var.project}-save-metadata"
+  role          = var.save_metadata_role_arn
+  runtime       = "provided.al2"
+  handler       = "bootstrap"
+  filename      = "${path.module}/functions/save-metadata/function.zip"
+
+  timeout     = 300
+  memory_size = 512
+
+  environment {
+    variables = {
+      DOCUMENTS_BUCKET = var.documents_bucket_name
+      EXECUTIONS_TABLE = var.executions_table_name
+      DOCUMENTS_TABLE  = var.documents_table_name
+      CHUNKS_TABLE     = var.chunks_table_name
+      VECTOR_BUCKET    = var.vector_bucket_name
+      VECTOR_INDEX     = var.vector_index_name
+    }
+  }
+
+  tags = { Project = var.project }
+}

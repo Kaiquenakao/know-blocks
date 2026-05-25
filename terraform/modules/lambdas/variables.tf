@@ -31,3 +31,27 @@ variable "executions_table_name" {
   type    = string
   default = ""
 }
+
+variable "save_metadata_role_arn" {
+  type = string
+}
+
+variable "documents_table_name" {
+  type    = string
+  default = ""
+}
+
+variable "chunks_table_name" {
+  type    = string
+  default = ""
+}
+
+variable "vector_bucket_name" {
+  type    = string
+  default = ""
+}
+
+variable "vector_index_name" {
+  type    = string
+  default = "global-chunks"
+}

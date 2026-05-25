@@ -156,6 +156,7 @@ data "aws_iam_policy_document" "step_functions" {
     resources = [
       var.extract_text_arn,
       var.chunk_document_arn,
+      var.save_metadata_arn,
     ]
   }
 
@@ -231,6 +232,11 @@ data "aws_iam_policy_document" "ecs_task" {
     actions   = ["dynamodb:PutItem", "dynamodb:GetItem"]
     resources = [var.executions_table_arn]
   }
+  statement {
+    effect    = "Allow"
+    actions   = ["bedrock:InvokeModel"]
+    resources = ["arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0"]
+  }
 }
 
 resource "aws_iam_role_policy" "ecs_task" {
@@ -260,4 +266,44 @@ resource "aws_iam_role_policy" "step_functions_ecs" {
       }
     ]
   })
+}
+
+# ── save-metadata ─────────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "save_metadata" {
+  name               = "${var.project}-save-metadata"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+}
+
+data "aws_iam_policy_document" "save_metadata" {
+  statement {
+    effect    = "Allow"
+    actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["arn:aws:logs:*:*:*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:GetObject", "s3:DeleteObject"]
+    resources = ["${var.documents_bucket_arn}/*"]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:PutItem", "dynamodb:GetItem"]
+    resources = [
+      var.executions_table_arn,
+      var.documents_table_arn,
+      var.chunks_table_arn,
+    ]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["s3vectors:PutVector", "s3vectors:GetVector"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "save_metadata" {
+  name   = "${var.project}-save-metadata-policy"
+  role   = aws_iam_role.save_metadata.id
+  policy = data.aws_iam_policy_document.save_metadata.json
 }

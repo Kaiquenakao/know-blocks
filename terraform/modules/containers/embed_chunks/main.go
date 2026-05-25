@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -20,11 +21,12 @@ import (
 // ── Clientes AWS ──────────────────────────────────────────────────────────────
 
 var (
-	s3Client  *s3.Client
-	ddbClient *dynamodb.Client
-	bucket    string
-	execTable string
-	ollamaURL string
+	s3Client      *s3.Client
+	ddbClient     *dynamodb.Client
+	bedrockClient *bedrockruntime.Client
+	bucket        string
+	execTable     string
+	ollamaURL     string
 )
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -51,6 +53,16 @@ type OllamaResponse struct {
 	Embedding []float64 `json:"embedding"`
 }
 
+// Bedrock Titan request/response
+type TitanEmbedRequest struct {
+	InputText string `json:"inputText"`
+}
+
+type TitanEmbedResponse struct {
+	Embedding           []float64 `json:"embedding"`
+	InputTextTokenCount int       `json:"inputTextTokenCount"`
+}
+
 type TaskInput struct {
 	TempChunksKey string `json:"temp_chunks_key"`
 	Bucket        string `json:"bucket"`
@@ -68,13 +80,13 @@ func main() {
 		log.Fatalf("[embed-chunks] failed to load AWS config: %v", err)
 	}
 
-	s3Client  = s3.NewFromConfig(cfg)
+	s3Client = s3.NewFromConfig(cfg)
 	ddbClient = dynamodb.NewFromConfig(cfg)
-	bucket    = mustEnv("DOCUMENTS_BUCKET")
+	bedrockClient = bedrockruntime.NewFromConfig(cfg)
+	bucket = mustEnv("DOCUMENTS_BUCKET")
 	execTable = mustEnv("EXECUTIONS_TABLE")
 	ollamaURL = getEnv("OLLAMA_URL", "http://localhost:11434")
 
-	// Lê input via variável de ambiente (Step Function passa via env)
 	inputJSON := mustEnv("TASK_INPUT")
 	var input TaskInput
 	if err := json.Unmarshal([]byte(inputJSON), &input); err != nil {
@@ -90,16 +102,23 @@ func main() {
 }
 
 func run(ctx context.Context, input TaskInput) error {
-	updateStatus(ctx, input.ExecutionID, "embed_chunks", "running", 52, "Aguardando Ollama...")
+	model := input.EmbedModel
+	if model == "" {
+		model = "amazon.titan-embed-text-v2"
+	}
 
-	// Aguarda Ollama estar pronto
-	if err := waitOllama(); err != nil {
-		return fmt.Errorf("ollama not ready: %w", err)
+	isTitan := model == "amazon.titan-embed-text-v2"
+
+	// Ollama só é necessário para modelos não-Titan
+	if !isTitan {
+		updateStatus(ctx, input.ExecutionID, "embed_chunks", "running", 52, "Aguardando Ollama...")
+		if err := waitOllama(); err != nil {
+			return fmt.Errorf("ollama not ready: %w", err)
+		}
 	}
 
 	updateStatus(ctx, input.ExecutionID, "embed_chunks", "running", 55, "Baixando chunks do S3...")
 
-	// Baixa chunks.json do S3 temp
 	result, err := s3Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(input.Bucket),
 		Key:    aws.String(input.TempChunksKey),
@@ -114,13 +133,7 @@ func run(ctx context.Context, input TaskInput) error {
 		return fmt.Errorf("failed to parse chunks: %w", err)
 	}
 
-	log.Printf("[embed-chunks] loaded %d chunks", len(chunks))
-
-	// Embeda cada chunk
-	model := input.EmbedModel
-	if model == "" {
-		model = "nomic-embed-text"
-	}
+	log.Printf("[embed-chunks] loaded %d chunks — model=%s", len(chunks), model)
 
 	chunksWithVectors := make([]ChunkWithVector, 0, len(chunks))
 	for i, chunk := range chunks {
@@ -131,7 +144,12 @@ func run(ctx context.Context, input TaskInput) error {
 			updateStatus(ctx, input.ExecutionID, "embed_chunks", "running", progress, msg)
 		}
 
-		vector, err := embed(chunk.Text, model)
+		var vector []float64
+		if isTitan {
+			vector, err = embedTitan(ctx, chunk.Text)
+		} else {
+			vector, err = embedOllama(chunk.Text, model)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to embed chunk %s: %w", chunk.ID, err)
 		}
@@ -146,7 +164,6 @@ func run(ctx context.Context, input TaskInput) error {
 	log.Printf("[embed-chunks] all %d chunks embedded", len(chunksWithVectors))
 	updateStatus(ctx, input.ExecutionID, "embed_chunks", "running", 80, "Salvando vetores no S3...")
 
-	// Salva resultado no S3 temp
 	tempVectorsKey := fmt.Sprintf("temp/%s/vectors.json", input.ExecutionID)
 	data, err := json.Marshal(chunksWithVectors)
 	if err != nil {
@@ -185,7 +202,7 @@ func waitOllama() error {
 	return fmt.Errorf("ollama did not respond after 60s")
 }
 
-func embed(text, model string) ([]float64, error) {
+func embedOllama(text, model string) ([]float64, error) {
 	reqBody, _ := json.Marshal(OllamaRequest{
 		Model:  model,
 		Prompt: text,
@@ -207,6 +224,29 @@ func embed(text, model string) ([]float64, error) {
 	}
 
 	return ollamaResp.Embedding, nil
+}
+
+// ── Bedrock Titan ─────────────────────────────────────────────────────────────
+
+func embedTitan(ctx context.Context, text string) ([]float64, error) {
+	reqBody, _ := json.Marshal(TitanEmbedRequest{InputText: text})
+
+	resp, err := bedrockClient.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
+		ModelId:     aws.String("amazon.titan-embed-text-v2:0"),
+		ContentType: aws.String("application/json"),
+		Body:        reqBody,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bedrock request failed: %w", err)
+	}
+
+	var titanResp TitanEmbedResponse
+	if err := json.Unmarshal(resp.Body, &titanResp); err != nil {
+		return nil, fmt.Errorf("failed to parse titan response: %w", err)
+	}
+
+	log.Printf("[embed-chunks] titan embedded %d tokens", titanResp.InputTextTokenCount)
+	return titanResp.Embedding, nil
 }
 
 // ── DynamoDB ──────────────────────────────────────────────────────────────────

@@ -29,3 +29,11 @@ output "chunk_document_arn" {
 output "chunk_document_name" {
   value = aws_lambda_function.chunk_document.function_name
 }
+
+output "save_metadata_arn" {
+  value = aws_lambda_function.save_metadata.arn
+}
+
+output "save_metadata_name" {
+  value = aws_lambda_function.save_metadata.function_name
+}
